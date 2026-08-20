@@ -11,7 +11,7 @@ export default function SellerAuth() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  if (user) return <Navigate to="/dashboard" replace />;
+  if (user) return <Navigate to="/listings" replace />;
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -26,7 +26,7 @@ export default function SellerAuth() {
     if (signInError) {
       setError(signInError.message);
     } else {
-      navigate("/dashboard");
+      navigate("/listings");
     }
   }
 

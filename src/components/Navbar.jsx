@@ -41,22 +41,16 @@ export default function Navbar() {
           {user ? (
             <>
               <NavLink
-                to="/dashboard"
+                to="/listings"
                 className={({ isActive }) => "nav-link" + (isActive ? " active" : "")}
               >
-                My Listings
+                Listings
               </NavLink>
               <NavLink
                 to="/orders"
                 className={({ isActive }) => "nav-link" + (isActive ? " active" : "")}
               >
                 Orders
-              </NavLink>
-              <NavLink
-                to="/sell"
-                className={({ isActive }) => "nav-link" + (isActive ? " active" : "")}
-              >
-                + New Listing
               </NavLink>
               <button className="nav-link" onClick={signOut} style={{ cursor: "pointer" }}>
                 Log Out

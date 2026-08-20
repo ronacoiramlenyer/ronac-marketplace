@@ -1,13 +1,12 @@
 import React from "react";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Landing from "./pages/Landing";
 import Catalog from "./pages/Catalog";
 import SellerAuth from "./pages/SellerAuth";
-import SellerDashboard from "./pages/SellerDashboard";
-import NewListing from "./pages/NewListing";
+import Listings from "./pages/Listings";
 import Cart from "./pages/Cart";
 import OrderConfirmed from "./pages/OrderConfirmed";
 import Orders from "./pages/Orders";
@@ -24,10 +23,10 @@ export default function App() {
           <Route path="/order-confirmed" element={<OrderConfirmed />} />
           <Route path="/login" element={<SellerAuth />} />
           <Route
-            path="/dashboard"
+            path="/listings"
             element={
               <ProtectedRoute>
-                <SellerDashboard />
+                <Listings />
               </ProtectedRoute>
             }
           />
@@ -39,14 +38,9 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/sell"
-            element={
-              <ProtectedRoute>
-                <NewListing />
-              </ProtectedRoute>
-            }
-          />
+          {/* old links redirect so nothing breaks if bookmarked */}
+          <Route path="/dashboard" element={<Navigate to="/listings" replace />} />
+          <Route path="/sell" element={<Navigate to="/listings" replace />} />
           <Route path="*" element={<Landing />} />
         </Routes>
       </main>
