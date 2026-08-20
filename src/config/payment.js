@@ -10,7 +10,7 @@ export const PAYMENT_METHODS = [
     label: "GCash",
     accountName: "RE***L MA**O C.", // TODO: your GCash registered name
     accountNumber: "0956 466 0037", // TODO: your GCash number
-    qrImage: "/gcash-qr.png", // TODO: replace with your real GCash QR (e.g. /gcash-qr.png)
+    qrImage: "/gcash-qr.jpeg", // TODO: replace with your real GCash QR (e.g. /gcash-qr.png)
   },
   {
     id: "bpi",
