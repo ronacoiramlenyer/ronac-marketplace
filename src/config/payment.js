@@ -18,5 +18,5 @@ export const PAYMENT_METHODS = [
     accountName: "REYNEL MARIO CANOR", // TODO: your BPI account name
     accountNumber: "3109 1450 08", // TODO: your BPI account number
     qrImage: "/bpi-qr.png", // TODO: replace with your real BPI QR (e.g. /bpi-qr.png)
-  },1
+  },
 ];
