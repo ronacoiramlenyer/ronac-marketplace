@@ -3,13 +3,15 @@ import { useNavigate } from "react-router-dom";
 import { supabase, STORAGE_BUCKET } from "../supabaseClient";
 import { useAuth } from "../context/AuthContext";
 
+// Single-seller marketplace — these are fixed rather than typed per listing.
+const SELLER_NAME = "Ronac Marketplace";
+const SELLER_CONTACT = null;
+
 export default function NewListing() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
   const [form, setForm] = useState({
-    seller_name: "",
-    seller_contact: "",
     product_name: "",
     description: "",
     price: "",
@@ -35,8 +37,8 @@ export default function NewListing() {
     e.preventDefault();
     setError("");
 
-    if (!form.seller_name || !form.product_name || !form.price) {
-      setError("Please fill in seller name, product name, and price.");
+    if (!form.product_name || !form.price) {
+      setError("Please fill in product name and price.");
       return;
     }
 
@@ -61,8 +63,8 @@ export default function NewListing() {
 
       const { error: insertError } = await supabase.from("listings").insert({
         seller_id: user.id,
-        seller_name: form.seller_name,
-        seller_contact: form.seller_contact,
+        seller_name: SELLER_NAME,
+        seller_contact: SELLER_CONTACT,
         seller_email: user.email,
         product_name: form.product_name,
         description: form.description,
@@ -108,29 +110,6 @@ export default function NewListing() {
             onChange={onImageChange}
             style={{ display: "none" }}
           />
-        </div>
-
-        <div className="field-row">
-          <div className="field">
-            <label htmlFor="seller_name">Seller / shop name</label>
-            <input
-              id="seller_name"
-              type="text"
-              value={form.seller_name}
-              onChange={(e) => update("seller_name", e.target.value)}
-              placeholder="e.g. Aling Nena's Kitchen"
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="seller_contact">Contact number</label>
-            <input
-              id="seller_contact"
-              type="tel"
-              value={form.seller_contact}
-              onChange={(e) => update("seller_contact", e.target.value)}
-              placeholder="09xx xxx xxxx"
-            />
-          </div>
         </div>
 
         <div className="field">
