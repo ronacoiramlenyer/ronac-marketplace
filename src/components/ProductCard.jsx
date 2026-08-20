@@ -37,7 +37,6 @@ export default function ProductCard({ listing }) {
       </div>
       <div className="card-body">
         <h3 className="card-title">{product_name}</h3>
-        <div className="card-seller">{seller_name}</div>
         {description ? <p className="card-desc">{description}</p> : null}
         <div className="card-foot">
           <span className="price">
