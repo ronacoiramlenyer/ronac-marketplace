@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabaseClient";
 
 const STATUS_LABEL = {
@@ -7,10 +7,17 @@ const STATUS_LABEL = {
   fulfilled: "Fulfilled",
 };
 
+const TABS = [
+  { id: "pending", label: "Pending" },
+  { id: "verified", label: "Verified" },
+  { id: "fulfilled", label: "Fulfilled" },
+];
+
 export default function Orders() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [activeTab, setActiveTab] = useState("pending");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -40,6 +47,19 @@ export default function Orders() {
     }
   }
 
+  const counts = useMemo(() => {
+    const c = { pending: 0, verified: 0, fulfilled: 0 };
+    for (const o of orders) {
+      if (c[o.status] !== undefined) c[o.status] += 1;
+    }
+    return c;
+  }, [orders]);
+
+  const filteredOrders = useMemo(
+    () => orders.filter((o) => o.status === activeTab),
+    [orders, activeTab]
+  );
+
   return (
     <div className="container" style={{ padding: "48px 0" }}>
       <div className="page-header" style={{ padding: "0 0 20px" }}>
@@ -47,18 +67,36 @@ export default function Orders() {
         <p>Payments buyers have submitted, waiting on your verification.</p>
       </div>
 
+      <div className="method-tabs" style={{ marginBottom: 24 }}>
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            className={`method-tab${activeTab === tab.id ? " active" : ""}`}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+            <span className="tab-count">{counts[tab.id]}</span>
+          </button>
+        ))}
+      </div>
+
       {error && <div className="alert alert-error">{error}</div>}
 
       {loading ? (
         <div className="empty-state">Loading orders…</div>
-      ) : orders.length === 0 ? (
+      ) : filteredOrders.length === 0 ? (
         <div className="empty-state">
-          <h3>No orders yet</h3>
-          <p>Submitted orders will show up here once a buyer checks out.</p>
+          <h3>No {TABS.find((t) => t.id === activeTab)?.label.toLowerCase()} orders</h3>
+          <p>
+            {activeTab === "pending"
+              ? "New orders will show up here once a buyer checks out."
+              : "Orders will appear here once you move them to this status."}
+          </p>
         </div>
       ) : (
         <div className="order-list">
-          {orders.map((o) => (
+          {filteredOrders.map((o) => (
             <div className="order-card" key={o.id}>
               <div className="order-card-head">
                 <div>

@@ -904,3 +904,21 @@ button, input, textarea, select { font-family: inherit; }
   color: var(--ink-soft);
   margin-top: 10px;
 }
+
+/* ---------- Order status tab count badge ---------- */
+.tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-left: 6px;
+  border-radius: 999px;
+  background: rgba(43, 24, 16, 0.12);
+  color: inherit;
+  font-size: 10.5px;
+}
+.method-tab.active .tab-count {
+  background: rgba(251, 241, 225, 0.25);
+}
