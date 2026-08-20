@@ -15,7 +15,6 @@ export default function NewListing() {
     product_name: "",
     description: "",
     price: "",
-    stripe_payment_link: "",
   });
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
@@ -70,7 +69,6 @@ export default function NewListing() {
         description: form.description,
         price: Number(form.price),
         image_url,
-        stripe_payment_link: form.stripe_payment_link || null,
         status: "available",
       });
 
@@ -133,34 +131,18 @@ export default function NewListing() {
           />
         </div>
 
-        <div className="field-row">
-          <div className="field">
-            <label htmlFor="price">Price (₱)</label>
-            <input
-              id="price"
-              type="number"
-              min="0"
-              step="1"
-              value={form.price}
-              onChange={(e) => update("price", e.target.value)}
-              placeholder="280"
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="stripe_link">Stripe payment link (optional)</label>
-            <input
-              id="stripe_link"
-              type="url"
-              value={form.stripe_payment_link}
-              onChange={(e) => update("stripe_payment_link", e.target.value)}
-              placeholder="https://buy.stripe.com/…"
-            />
-          </div>
+        <div className="field">
+          <label htmlFor="price">Price (₱)</label>
+          <input
+            id="price"
+            type="number"
+            min="0"
+            step="1"
+            value={form.price}
+            onChange={(e) => update("price", e.target.value)}
+            placeholder="280"
+          />
         </div>
-        <p className="field-hint" style={{ marginTop: -10, marginBottom: 18 }}>
-          Create a Payment Link for this item in your Stripe Dashboard (Payment Links →
-          New) and paste it here so buyers can check out directly.
-        </p>
 
         <button className="btn btn-red btn-block" type="submit" disabled={busy}>
           {busy ? "Publishing…" : "Publish Listing"}

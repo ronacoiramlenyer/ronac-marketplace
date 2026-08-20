@@ -8,6 +8,9 @@ import Catalog from "./pages/Catalog";
 import SellerAuth from "./pages/SellerAuth";
 import SellerDashboard from "./pages/SellerDashboard";
 import NewListing from "./pages/NewListing";
+import Cart from "./pages/Cart";
+import OrderConfirmed from "./pages/OrderConfirmed";
+import Orders from "./pages/Orders";
 
 export default function App() {
   return (
@@ -17,12 +20,22 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/catalog" element={<Catalog />} />
+          <Route path="/cart" element={<Cart />} />
+          <Route path="/order-confirmed" element={<OrderConfirmed />} />
           <Route path="/login" element={<SellerAuth />} />
           <Route
             path="/dashboard"
             element={
               <ProtectedRoute>
                 <SellerDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/orders"
+            element={
+              <ProtectedRoute>
+                <Orders />
               </ProtectedRoute>
             }
           />

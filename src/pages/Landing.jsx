@@ -61,10 +61,10 @@ export default function Landing() {
             </div>
             <div className="ticket-row">
               <span>Sweet Longganisa (1kg)</span>
-              <span>210</span>
+              <span>₱280</span>
             </div>
             <div className="ticket-row">
-              <span>Pork Tocino (500g)</span>
+              <span>Beef Tapa (500g)</span>
               <span>₱220</span>
             </div>
             <div className="ticket-row">
@@ -73,7 +73,7 @@ export default function Landing() {
             </div>
             <div className="ticket-total">
               <span className="label">Total</span>
-              <span className="value">680</span>
+              <span className="value">₱750</span>
             </div>
           </div>
         </div>

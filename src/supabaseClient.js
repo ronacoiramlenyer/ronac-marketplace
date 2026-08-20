@@ -14,3 +14,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export const STORAGE_BUCKET =
   import.meta.env.VITE_SUPABASE_STORAGE_BUCKET || "product-images";
+
+export const STORAGE_BUCKET_PROOFS =
+  import.meta.env.VITE_SUPABASE_PROOFS_BUCKET || "payment-proofs";
