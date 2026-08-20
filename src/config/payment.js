@@ -10,13 +10,13 @@ export const PAYMENT_METHODS = [
     label: "GCash",
     accountName: "RE***L MA**O C.", // TODO: your GCash registered name
     accountNumber: "0956 466 0037", // TODO: your GCash number
-    qrImage: "/gcash-qr.svg", // TODO: replace with your real GCash QR (e.g. /gcash-qr.png)
+    qrImage: "/gcash-qr.png", // TODO: replace with your real GCash QR (e.g. /gcash-qr.png)
   },
   {
     id: "bpi",
     label: "BPI",
     accountName: "REYNEL MARIO CANOR", // TODO: your BPI account name
     accountNumber: "3109 1450 08", // TODO: your BPI account number
-    qrImage: "/bpi-qr.svg", // TODO: replace with your real BPI QR (e.g. /bpi-qr.png)
-  },
+    qrImage: "/bpi-qr.png", // TODO: replace with your real BPI QR (e.g. /bpi-qr.png)
+  },1
 ];
