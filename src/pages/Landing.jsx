@@ -12,8 +12,16 @@ const CATEGORIES = [
   "More coming soon",
 ];
 
+// Shown in the hero ticket only if there aren't enough real listings yet.
+const FALLBACK_TICKET_ITEMS = [
+  { product_name: "Sweet Longganisa (1kg)", price: 280 },
+  { product_name: "Beef Tapa (500g)", price: 220 },
+  { product_name: "Frozen Siomai (20pc)", price: 250 },
+];
+
 export default function Landing() {
   const [featured, setFeatured] = useState([]);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -24,12 +32,21 @@ export default function Landing() {
       .order("created_at", { ascending: false })
       .limit(3)
       .then(({ data }) => {
-        if (active && data) setFeatured(data);
+        if (active) {
+          setFeatured(data || []);
+          setLoaded(true);
+        }
       });
     return () => {
       active = false;
     };
   }, []);
+
+  const ticketItems =
+    loaded && featured.length > 0
+      ? featured.map((l) => ({ product_name: l.product_name, price: Number(l.price) }))
+      : FALLBACK_TICKET_ITEMS;
+  const ticketTotal = ticketItems.reduce((sum, i) => sum + i.price, 0);
 
   return (
     <>
@@ -44,13 +61,12 @@ export default function Landing() {
               sold straight from the cook.
             </h1>
             <p className="lede">
-              Ronac connects home-based Filipino food makers with buyers craving
-              real longganisa, tocino, embutido, tapa, and siomai — vacuum-sealed,
-              frozen, and ready for your freezer.
+              Real longganisa, tocino, embutido, tapa, and siomai — made in
+              small batches, vacuum-sealed, frozen, and ready for your
+              freezer.
             </p>
             <div className="hero-actions">
               <Link className="btn btn-red" to="/catalog">Browse the Freezer</Link>
-              <Link className="btn btn-outline" to="/login">Start Selling</Link>
             </div>
           </div>
 
@@ -59,21 +75,15 @@ export default function Landing() {
               <span>Order Ticket</span>
               <span>No. 0148</span>
             </div>
-            <div className="ticket-row">
-              <span>Sweet Longganisa (1kg)</span>
-              <span>₱280</span>
-            </div>
-            <div className="ticket-row">
-              <span>Beef Tapa (500g)</span>
-              <span>₱220</span>
-            </div>
-            <div className="ticket-row">
-              <span>Frozen Siomai (20pc)</span>
-              <span>₱250</span>
-            </div>
+            {ticketItems.map((item, idx) => (
+              <div className="ticket-row" key={idx}>
+                <span>{item.product_name}</span>
+                <span>₱{item.price.toLocaleString("en-PH")}</span>
+              </div>
+            ))}
             <div className="ticket-total">
               <span className="label">Total</span>
-              <span className="value">₱750</span>
+              <span className="value">₱{ticketTotal.toLocaleString("en-PH")}</span>
             </div>
           </div>
         </div>
@@ -97,24 +107,24 @@ export default function Landing() {
       <section className="section">
         <div className="container">
           <div className="section-head">
-            <h2>How Ronac works</h2>
-            <p>Three steps, no middleman kitchen.</p>
+            <h2>How ordering works</h2>
+            <p>Three steps, no card required.</p>
           </div>
           <div className="steps">
             <div className="step">
-              <span className="num">01 · Sellers</span>
-              <h3>List what you froze</h3>
-              <p>Snap a photo, set a price, describe the batch. Your listing goes live for buyers to see.</p>
+              <span className="num">01</span>
+              <h3>Pick your batch</h3>
+              <p>Browse what's available and add it to your cart.</p>
             </div>
             <div className="step">
-              <span className="num">02 · Buyers</span>
-              <h3>Browse & pay securely</h3>
-              <p>Find available items nearby, then check out through the seller's Stripe payment link.</p>
+              <span className="num">02</span>
+              <h3>Pay via GCash or BPI</h3>
+              <p>Scan the QR at checkout, then upload a screenshot of your payment.</p>
             </div>
             <div className="step">
-              <span className="num">03 · Both</span>
-              <h3>Get notified</h3>
-              <p>Sellers get an email the moment an item is marked sold, so packing day starts right away.</p>
+              <span className="num">03</span>
+              <h3>We confirm & arrange delivery</h3>
+              <p>Once your payment is verified, we'll reach out to sort out pickup or delivery.</p>
             </div>
           </div>
         </div>

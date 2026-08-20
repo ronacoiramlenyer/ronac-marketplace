@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 export default function OrderConfirmed() {
   return (
-    <div className="container" style={{ padding: "64px 0" }}>
+    <div className="container" style={{ paddingTop: 64, paddingBottom: 64 }}>
       <div className="empty-state">
         <h3>Order submitted 🎉</h3>
         <p>

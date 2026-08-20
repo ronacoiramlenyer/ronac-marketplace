@@ -134,7 +134,7 @@ export default function Listings() {
   const soldCount = listings.filter((l) => l.status === "sold").length;
 
   return (
-    <div className="container" style={{ padding: "48px 0" }}>
+    <div className="container" style={{ paddingTop: 48, paddingBottom: 48 }}>
       <div className="section-head" style={{ marginBottom: 8 }}>
         <div>
           <h1 style={{ fontFamily: "var(--display)", fontSize: 32, margin: 0 }}>

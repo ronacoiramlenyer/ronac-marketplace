@@ -31,7 +31,7 @@ export default function SellerAuth() {
   }
 
   return (
-    <div className="container" style={{ padding: "56px 0" }}>
+    <div className="container" style={{ paddingTop: 56, paddingBottom: 56 }}>
       <div className="page-header" style={{ padding: "0 0 24px" }}>
         <h1>Seller Log In</h1>
         <p>Manage your frozen goods listings.</p>

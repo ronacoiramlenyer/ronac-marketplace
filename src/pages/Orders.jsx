@@ -61,7 +61,7 @@ export default function Orders() {
   );
 
   return (
-    <div className="container" style={{ padding: "48px 0" }}>
+    <div className="container" style={{ paddingTop: 48, paddingBottom: 48 }}>
       <div className="page-header" style={{ padding: "0 0 20px" }}>
         <h1>Orders</h1>
         <p>Payments buyers have submitted, waiting on your verification.</p>

@@ -7,7 +7,7 @@ export default function ProtectedRoute({ children }) {
 
   if (loading) {
     return (
-      <div className="container" style={{ padding: "60px 0" }}>
+      <div className="container" style={{ paddingTop: 60, paddingBottom: 60 }}>
         Loading…
       </div>
     );

@@ -78,7 +78,7 @@ export default function Cart() {
 
   if (items.length === 0) {
     return (
-      <div className="container" style={{ padding: "48px 0" }}>
+      <div className="container" style={{ paddingTop: 48, paddingBottom: 48 }}>
         <div className="empty-state">
           <h3>Your cart is empty</h3>
           <p>Add a batch from the catalog to get started.</p>
@@ -91,7 +91,7 @@ export default function Cart() {
   }
 
   return (
-    <div className="container" style={{ padding: "32px 0 56px" }}>
+    <div className="container" style={{ paddingTop: 32, paddingBottom: 56 }}>
       <div className="page-header" style={{ padding: "0 0 20px" }}>
         <h1>Your cart</h1>
         <p>Review your order, then pay via GCash or BPI and upload proof.</p>
