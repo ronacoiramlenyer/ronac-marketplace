@@ -922,3 +922,45 @@ button, input, textarea, select { font-family: inherit; }
 .method-tab.active .tab-count {
   background: rgba(251, 241, 225, 0.25);
 }
+
+/* ---------- Seller dashboard quick stats ---------- */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin: 20px 0 8px;
+}
+@media (min-width: 560px) {
+  .stats-row { grid-template-columns: repeat(4, 1fr); gap: 12px; }
+}
+.stat-card {
+  background: var(--white);
+  border: 1px solid rgba(43,24,16,0.1);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-decoration: none;
+  color: inherit;
+  box-shadow: 0 1px 2px rgba(43,24,16,0.05);
+}
+.stat-value {
+  font-family: var(--display);
+  font-size: 26px;
+  color: var(--ink);
+}
+.stat-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+}
+.stat-card-link {
+  border-color: var(--red);
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+.stat-card-link:hover { transform: translateY(-2px); }
+.stat-card-link .stat-value { color: var(--red); }

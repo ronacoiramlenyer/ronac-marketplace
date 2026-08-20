@@ -7,19 +7,28 @@ import { StatusTag } from "../components/ProductCard";
 export default function SellerDashboard() {
   const { user } = useAuth();
   const [listings, setListings] = useState([]);
+  const [pendingOrders, setPendingOrders] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data, error: fetchError } = await supabase
-      .from("listings")
-      .select("*")
-      .eq("seller_id", user.id)
-      .order("created_at", { ascending: false });
+    const [{ data, error: fetchError }, { count, error: countError }] = await Promise.all([
+      supabase
+        .from("listings")
+        .select("*")
+        .eq("seller_id", user.id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("orders")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "pending"),
+    ]);
 
     if (fetchError) setError(fetchError.message);
     else setListings(data || []);
+    if (countError) setError(countError.message);
+    else setPendingOrders(count || 0);
     setLoading(false);
   }, [user.id]);
 
@@ -42,6 +51,10 @@ export default function SellerDashboard() {
     }
   }
 
+  const availableCount = listings.filter((l) => (l.status || "available") === "available").length;
+  const pendingCount = listings.filter((l) => l.status === "pending").length;
+  const soldCount = listings.filter((l) => l.status === "sold").length;
+
   return (
     <div className="container" style={{ padding: "48px 0" }}>
       <div className="section-head" style={{ marginBottom: 8 }}>
@@ -55,6 +68,27 @@ export default function SellerDashboard() {
         </div>
         <Link className="btn btn-red" to="/sell">+ New Listing</Link>
       </div>
+
+      {!loading && (
+        <div className="stats-row">
+          <div className="stat-card">
+            <span className="stat-value">{availableCount}</span>
+            <span className="stat-label">Available</span>
+          </div>
+          <div className="stat-card">
+            <span className="stat-value">{pendingCount}</span>
+            <span className="stat-label">Pending</span>
+          </div>
+          <div className="stat-card">
+            <span className="stat-value">{soldCount}</span>
+            <span className="stat-label">Sold</span>
+          </div>
+          <Link to="/orders" className="stat-card stat-card-link">
+            <span className="stat-value">{pendingOrders}</span>
+            <span className="stat-label">Orders to verify</span>
+          </Link>
+        </div>
+      )}
 
       {error && <div className="alert alert-error" style={{ marginTop: 20 }}>{error}</div>}
 
