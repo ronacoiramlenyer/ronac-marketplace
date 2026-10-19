@@ -1,6 +1,7 @@
 # Proposal: Online Ordering Workflow for Longganisa
 
-Status: **Draft for review** · Scope: buyer checkout + seller fulfillment for
+Status: **Draft for review** · Scope: buyer checkout, seller fulfillment and
+platform (all Cloudflare) for
 frozen longganisa on Ronac.
 
 This proposal revises the workflow already in the repo. It keeps what works
@@ -17,8 +18,10 @@ made-in-batches item like longganisa.
 | Delivery | **Neovista Homes and Tierra Nova Royale** only — near the seller's home. |
 | Next-day cut-off | **6:00 PM.** Orders placed after 6 PM are scheduled for the day after tomorrow at the earliest. |
 | Unpaid orders | **Unpaid orders don't go through.** An order only exists once payment proof is attached; there is no "reserve now, pay later". |
-| New-order alerts | Any channel — **email via the existing Resend setup** is proposed (already wired, free tier). |
-| Minimum order / delivery fee | *Still open* — see §7. |
+| New-order alerts | Any channel — **email via Resend, sent from the Cloudflare Worker** is proposed (free tier). |
+| Platform | **All Cloudflare**: Workers (site + API), D1 (database), R2 (photos, payment proofs), Access (seller login). Supabase and Vercel are retired. See §4. |
+| Domain | **Not bought yet** — buy on Cloudflare Registrar. Netlify is not used. |
+| Minimum order / delivery fee | *Still open* — see §9. |
 
 ---
 
@@ -61,7 +64,7 @@ Gaps for longganisa specifically:
                    Then street/house no. + landmark.
                  • Date: earliest is tomorrow if before 6:00 PM, otherwise
                    the day after. Time slot from the seller's open slots.
-               Minimum order / delivery fee applied if set (§7).
+               Minimum order / delivery fee applied if set (§9).
 4. Details     Name, mobile number (09xx format validated), optional
                Messenger/FB name, notes ("gate code", "leave with guard").
 5. Review      Server re-prices the cart and returns the official total
@@ -127,121 +130,258 @@ Plus:
   (Neovista Homes, Tierra Nova Royale), each with a total pack count per
   posting ("Garlic 500 g × 14, Hamonado 1 kg × 6") so the seller knows what
   to pack for each.
-- **New-order alert**: email to the seller through the existing Resend
-  setup when an order is submitted, with order no., total, area and a link
+- **New-order alert**: email to the seller via Resend from the Worker
+  when an order is submitted, with order no., total, area and a link
   to the Orders page. SMS/Messenger can be added later.
 - **Stock edit**: set packs left on each posting when a new batch is made.
 
+
 ---
 
-## 4. Data model changes (Supabase)
+## 4. Platform: all Cloudflare
+
+Decision: move **everything** off Supabase and Vercel onto Cloudflare,
+including seller login and the domain. Netlify is not used.
+
+### What moves where
+
+| Today | On Cloudflare | Notes |
+|-------|---------------|-------|
+| Vercel (static site) | **Workers static assets** — one Worker serves the React app *and* the `/api/*` routes | Cloudflare now recommends Workers over Pages for new projects. One deploy, one URL. |
+| Supabase Postgres + RLS | **D1** (SQLite) | No RLS in D1 — every read/write goes through the Worker API, which enforces the rules. This is the same move step 1 already needed (server-side pricing and stock). |
+| Supabase Storage `product-images` (public) | **R2** bucket `ronac-product-images`, served by the Worker at `/img/<key>` with long cache headers | |
+| Supabase Storage `payment-proofs` (public) | **R2** bucket `ronac-payment-proofs`, **private** | Buyer uploads through the Worker; only the seller can view, through an Access-protected route. Closes gap 8. |
+| Supabase Auth (email + password) | **Cloudflare Access** (Zero Trust), one-time PIN sent to the seller's email | No passwords, no sign-up page, no login code to maintain. Free up to 50 users. Buyers still never log in. Closes gap 9. |
+| Supabase Edge Function + DB webhook (`notify-seller`) | Email sent from the Worker right after an order is saved (`ctx.waitUntil`), still via **Resend** | No webhook to configure. |
+| Vercel `api/create-checkout-session.js` (Stripe) | Removed | Unused. |
+| Domain (none yet) | **Cloudflare Registrar** + Cloudflare DNS | Access login on a custom domain requires the domain's DNS to be on Cloudflare. |
+
+### Domain
+
+- Buy a `.com` (or another supported TLD) on **Cloudflare Registrar** —
+  sold at cost, no markup, DNS is set up automatically.
+- Cloudflare Registrar does **not** sell `.ph` / `.com.ph`. If a `.ph`
+  name is wanted, buy it from a `.ph` registrar and point its nameservers
+  to Cloudflare — everything below still works.
+- Until the domain is bought, the app runs on the free
+  `ronac.<account>.workers.dev` address for testing.
+
+### Seller login with Cloudflare Access
+
+- Access application on `<domain>/listings*`, `<domain>/orders*` and
+  `<domain>/api/admin/*`.
+- Policy: allow only the seller's email address (One-time PIN login).
+- The Worker also verifies the `Cf-Access-Jwt-Assertion` header on every
+  `/api/admin/*` request, so the API is safe even if a route is ever left
+  out of the Access app by mistake.
+- `AuthContext`, `SellerAuth` and `ProtectedRoute` are deleted; the "Seller
+  login" link just goes to `/listings` and Access shows the PIN screen.
+
+### Cost (free tiers, as of this writing)
+
+| Service | Free allowance | Ronac's likely use |
+|---------|----------------|--------------------|
+| Workers | 100,000 requests/day | A few hundred |
+| D1 | 5 GB storage | A few MB |
+| R2 | 10 GB storage, **no egress fees** | Photos + screenshots, well under 1 GB for a long time |
+| Access | 50 users | 1 |
+| Resend | 3,000 emails/month | One per order |
+| Registrar | at cost (≈ US$10/yr for `.com`) | The only real cost |
+
+No more Supabase free-tier pausing after a week without activity.
+
+---
+
+## 5. Data model (D1)
+
+`migrations/0001_init.sql`, applied with `wrangler d1 migrations apply`.
 
 ```sql
--- listings: one row per variant (as today), add:
-  stock int not null default 0 check (stock >= 0)
-  -- status 'sold' is set automatically when stock hits 0
+create table listings (
+  id           text primary key,          -- uuid generated in the Worker
+  product_name text not null,             -- one posting per variant
+  description  text,
+  price        integer not null check (price >= 0),   -- centavos
+  stock        integer not null default 0 check (stock >= 0),
+  image_key    text,                      -- R2 key in ronac-product-images
+  is_active    integer not null default 1,
+  created_at   text not null default (datetime('now'))
+);
+-- "Sold out" = stock = 0; no separate status column needed.
 
--- orders: add
-  order_no      text unique   -- "RNC-0142", from a sequence
-  access_token  text          -- for the buyer's tracking link
-  fulfillment   text check (fulfillment in ('pickup','delivery'))
-  area_id       fk → service_areas
-  address       text, landmark text      -- delivery only
-  slot_date     date, slot_time text
-  delivery_fee  numeric(10,2) default 0
-  payment_ref   text not null  -- GCash/BPI reference number
-  proof_path    text not null  -- unpaid orders can't exist
-  reject_reason text
-  status        -- new set: submitted, paid, rejected, preparing,
-                --          ready_for_pickup, out_for_delivery,
-                --          completed, cancelled
-  status_updated_at timestamptz
+create table service_areas (
+  id              integer primary key,
+  name            text not null,
+  allows_pickup   integer not null,
+  allows_delivery integer not null,
+  delivery_fee    integer not null default 0,   -- centavos
+  min_order       integer not null default 0,   -- centavos
+  is_active       integer not null default 1
+);
+insert into service_areas (name, allows_pickup, allows_delivery) values
+  ('La Salle Green Hills', 1, 0),
+  ('Neovista Homes',       0, 1),
+  ('Tierra Nova Royale',   0, 1);
 
--- service areas + slots (small config tables, seller-editable)
-service_areas (name text, delivery_fee numeric, min_order numeric,
-               allows_pickup bool, allows_delivery bool, is_active bool)
-  -- seeded: La Salle Green Hills (pickup only),
-  --         Neovista Homes, Tierra Nova Royale (delivery only)
-time_slots    (time_label text, capacity int, is_active bool)
+create table time_slots (
+  id          integer primary key,
+  fulfillment text not null check (fulfillment in ('pickup','delivery')),
+  time_label  text not null,             -- "12:00–1:00 PM"
+  is_active   integer not null default 1
+);
+
+create table orders (
+  seq           integer primary key autoincrement,   -- → order_no RNC-0001
+  id            text not null unique,
+  access_token  text not null,          -- buyer tracking link
+  buyer_name    text not null,
+  buyer_contact text not null,
+  buyer_fb      text,
+  notes         text,
+  fulfillment   text not null check (fulfillment in ('pickup','delivery')),
+  area_id       integer not null references service_areas(id),
+  address       text,
+  landmark      text,
+  slot_date     text not null,          -- YYYY-MM-DD, Asia/Manila
+  slot_id       integer not null references time_slots(id),
+  subtotal      integer not null,
+  delivery_fee  integer not null,
+  total         integer not null,
+  payment_method text not null check (payment_method in ('gcash','bpi')),
+  payment_ref   text not null,          -- required: unpaid orders can't exist
+  proof_key     text not null,          -- R2 key in ronac-payment-proofs
+  status        text not null default 'submitted' check (status in
+                ('submitted','paid','rejected','preparing','ready_for_pickup',
+                 'out_for_delivery','completed','cancelled')),
+  reject_reason text,
+  refunded      integer not null default 0,
+  created_at    text not null default (datetime('now')),
+  status_updated_at text not null default (datetime('now'))
+);
+
+create table order_items (
+  order_id     text not null references orders(id),
+  listing_id   text not null references listings(id),
+  product_name text not null,           -- snapshot
+  price        integer not null,        -- snapshot, centavos
+  quantity     integer not null check (quantity > 0)
+);
 ```
 
-### Server-side order creation (fixes gaps 2, 7)
-
-Two Postgres functions replace the direct `insert into orders` from the
-browser:
-
-- `quote_order(lines, area_id, fulfillment)` — read-only. Returns the
-  official total for the Review/Pay step. Saves nothing.
-- `place_order({...})` — called on Submit, **after** the proof is uploaded:
-  1. Receives only `listing_id` + `quantity` per line, buyer and
-     fulfillment fields, `payment_ref`, `proof_path` — **never prices or
-     totals**. Rejects the call if proof or ref no. is missing.
-  2. Checks the area is an active service area and the slot date respects
-     the 6:00 PM (Asia/Manila) cut-off.
-  3. Locks the listing rows, checks `stock >= quantity`, decrements stock.
-  4. Looks up prices + area fee, computes the total itself.
-  5. Inserts the order with a generated `order_no` and `access_token`.
-  6. Returns `{ order_no, id, access_token, total }`.
-
-The anonymous `insert` policy on `orders` is then removed; the function runs
-as `security definer`. A matching `release_order_stock(order_id)` is called
-when an order moves to `rejected` or `cancelled` (trigger).
-
-### Buyer tracking (gap 5)
-
-`get_order_status(id, token)` function returns status, order_no, items,
-slot — only when the token matches. No buyer login required.
-
-### Security tightening (gaps 8, 9)
-
-- Make `payment-proofs` a **private** bucket; seller views proofs through
-  short-lived signed URLs (`createSignedUrl`).
-- Change `orders` select/update policies from `using (true)` to
-  `using (auth.uid() = '<seller uuid>')` (or a `sellers` table check), and
-  confirm sign-ups are disabled in Supabase Auth settings.
+Money is stored in **centavos** (integers) to avoid rounding errors.
 
 ---
 
-## 5. Frontend changes (by file)
+## 6. Worker API
+
+```
+Public (buyers)
+  GET  /api/listings                 active postings with price + stock
+  GET  /api/areas                    service areas + slots
+  POST /api/quote                    { lines, area_id, fulfillment } → server total. Saves nothing.
+  POST /api/proofs                   upload screenshot → { proof_key }. Image only, ≤ 5 MB.
+  POST /api/orders                   place the order (below)
+  GET  /api/orders/:id?t=token       buyer tracking
+  GET  /img/:key                     product photo from R2
+
+Seller (behind Cloudflare Access + JWT check)
+  GET    /api/admin/orders?status=…
+  PATCH  /api/admin/orders/:id       { status, reject_reason?, refunded? }
+  GET    /api/admin/proofs/:key      stream screenshot from private R2
+  GET    /api/admin/prep?date=…      pack totals for LSGH pickups / deliveries
+  POST   /api/admin/listings         create (multipart, photo → R2)
+  PATCH  /api/admin/listings/:id     edit price / stock / active
+  DELETE /api/admin/listings/:id
+  PUT    /api/admin/areas/:id, /api/admin/slots/:id   fees, min order, slots
+```
+
+### `POST /api/orders` (fixes gaps 2, 6, 7)
+
+1. Accepts only `listing_id` + `quantity` per line, buyer and fulfillment
+   fields, `payment_method`, `payment_ref`, `proof_key` — **never prices
+   or totals**. Refuses if the ref no. is missing or `proof_key` doesn't
+   exist in R2 → *unpaid orders don't go through*.
+2. Validates the area allows the chosen fulfillment (LSGH = pickup only;
+   Neovista / Tierra Nova Royale = delivery only) and the slot date
+   respects the **6:00 PM Asia/Manila cut-off**.
+3. Loads current prices + area fee, computes subtotal, fee and total;
+   enforces the area's minimum order.
+4. Runs one **D1 batch** (a single transaction): `update listings set
+   stock = stock - ?` for each line, insert `orders`, insert
+   `order_items`. If any line would take stock below 0 the `check (stock
+   >= 0)` constraint fails and **the whole batch rolls back** — the buyer
+   gets "Sorry, only N left".
+5. Emails the seller via Resend (`ctx.waitUntil`, doesn't slow the reply).
+6. Returns `{ order_no, id, access_token, total }`.
+
+Moving an order to `rejected` or `cancelled` adds its quantities back to
+stock in the same batch as the status change.
+
+---
+
+## 7. Frontend changes (by file)
 
 | File | Change |
 |------|--------|
+| `src/supabaseClient.js` | Replaced by `src/api.js` — small `fetch` wrapper for the routes above. |
+| `src/context/AuthContext.jsx`, `src/pages/SellerAuth.jsx`, `src/components/ProtectedRoute.jsx` | Removed — Cloudflare Access handles seller login. |
+| `src/components/Navbar.jsx` | "Seller" link → `/listings`; "Log out" → `/cdn-cgi/access/logout`. |
+| `src/pages/Catalog.jsx` | Load from `/api/listings`. |
 | `src/components/ProductCard.jsx` | Show "X left"; "Sold out" when stock is 0. |
-| `src/context/CartContext.jsx` | Store stock with each line; cap qty at stock. |
-| `src/pages/Cart.jsx` | Split into steps: Cart → Fulfillment (area dropdown, date honoring 6 PM cut-off, slot) → Details → Pay & Proof. Call `quote_order` to show the server total on the QR step; upload proof, then call `place_order` on Submit. |
-| `src/pages/OrderConfirmed.jsx` | Show order no., summary, slot, tracking link with copy button. |
+| `src/context/CartContext.jsx` | Store stock with each line; cap qty at stock; storage key `ronac_cart_v2`. |
+| `src/pages/Cart.jsx` | Steps: Cart → Pickup at LSGH / Delivery to Neovista or Tierra Nova Royale → date (6 PM cut-off) + slot → Details → Pay (amount from `/api/quote`) → Proof + ref no. → Submit (`/api/proofs`, then `/api/orders`). |
+| `src/pages/OrderConfirmed.jsx` | Order no., summary, area, date/slot, tracking link with copy button. |
 | `src/pages/TrackOrder.jsx` (new) | `/order/:id?t=token` status timeline. |
-| `src/pages/Orders.jsx` | New status tabs; inline proof (signed URL); Verify / Reject buttons instead of a raw dropdown; reject reason; daily prep view. |
-| `src/pages/Listings.jsx` | Add a "packs left" field to each posting. |
-| `supabase/functions/notify-seller` | Also fire on `orders` INSERT (new order) — optional: notify buyer by SMS on status change. |
-| `README.md` | Replace Stripe section with the GCash/BPI flow. |
-
-`api/create-checkout-session.js` (Stripe) is unused by the current flow and
-can be removed, or kept for a later card-payment option.
-
----
-
-## 6. Suggested rollout (small PRs)
-
-1. **Safety first** — server-side `place_order` with re-pricing, private
-   proofs bucket, tighter `orders` RLS, order number on confirmation. *(No
-   visible UX change beyond the order number; closes the price-tampering
-   and privacy holes.)*
-2. **Stock** — `stock` on listings, caps in the cart, decrement on submit,
-   release on reject/cancel, auto "Sold out".
-3. **Fulfillment** — pickup/delivery, the three service areas, 6 PM
-   cut-off, time slots, min order / fee once decided.
-4. **Seller ops** — new statuses, Verify/Reject, prep view, new-order email.
-5. **Buyer tracking** — tracking link + status page.
-6. **Cleanup** — README, remove Stripe stub.
+| `src/pages/Orders.jsx` | New status tabs; inline proof from `/api/admin/proofs`; Verify / Reject (with reason) buttons; Refunded checkbox; daily prep view. |
+| `src/pages/Listings.jsx` | Uses admin API; "packs left" field; photo upload to R2 through the Worker. |
+| `worker/index.js` (new) | API router + static assets + Access JWT check + Resend email. |
+| `migrations/0001_init.sql` (new) | Schema above. |
+| `wrangler.jsonc` (new) | Bindings: `DB` (D1), `IMAGES`, `PROOFS` (R2), `ASSETS`; vars `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`, `SELLER_EMAIL`; secret `RESEND_API_KEY`. |
+| `vite.config.js`, `package.json` | Add `@cloudflare/vite-plugin` + `wrangler`; `npm run dev` runs app + Worker locally with local D1/R2. |
+| Removed | `supabase/`, `api/`, `vercel.json`, `SETUP_SUPABASE.md`, `@supabase/supabase-js`. |
+| `README.md`, `RONAC_SETUP_GUIDE.md` | Rewritten for Cloudflare setup and the GCash/BPI flow. |
 
 ---
 
-## 7. Still open
+## 8. Migration and rollout
 
-1. **Minimum order and delivery fee.** Not decided yet. The proposal
-   supports a fee and minimum per area; until set, both default to ₱0
-   (free delivery, no minimum) so this doesn't block the build.
+Platform move and the step-1 safety fixes ship **together** — the Worker
+API *is* the safety fix, so there's no point building it on Supabase first.
+
+1. **Cloudflare foundation** — Worker + static assets, D1 schema, R2
+   buckets, `/api/listings`, Catalog reading from D1. Deploy to
+   `workers.dev`.
+2. **Orders on the Worker** — `/api/quote`, `/api/proofs`, `/api/orders`
+   with server pricing, stock check, order numbers, private proofs,
+   new-order email. Confirmation page shows the order number.
+3. **Seller side** — Cloudflare Access on admin routes, Orders and Listings
+   pages on the admin API, new statuses, Verify/Reject, refunds, stock
+   editing. Remove Supabase auth code.
+4. **Fulfillment** — LSGH pickup / Neovista & Tierra Nova Royale delivery,
+   6 PM cut-off, slots, fees and minimum once decided.
+5. **Buyer tracking + prep view.**
+6. **Data move + cutover**
+   - Export `listings` (and any `orders` worth keeping) from Supabase as
+     CSV → convert to SQL inserts → `wrangler d1 execute --remote`.
+   - Copy product photos from Supabase Storage to R2 (small script, or
+     `rclone` — both speak S3) and rewrite `image_url` → `image_key`.
+   - Buy the domain on Cloudflare Registrar, attach it to the Worker,
+     move the Access app to the custom domain.
+   - Smoke test a real ₱1 GCash order end to end.
+7. **Decommission** — delete the Vercel project and pause/delete the
+   Supabase project once nothing reads from it; remove leftover files.
+
+---
+
+## 9. Still open
+
+1. **Minimum order and delivery fee.** Not decided yet. Supported per area;
+   until set, both default to ₱0 (free delivery, no minimum) so this
+   doesn't block the build.
 2. **Pickup and delivery times.** Assumed: LSGH pickup during work hours,
-   home delivery after work. Exact slots and days still to be set; they
-   are seller-editable, so this doesn't block the build.
+   home delivery after work. Exact slots and days are seller-editable, so
+   this doesn't block the build.
+3. **Domain name** — which name to buy (and `.com` vs `.ph`; see §4).
+4. **Seller email** for the Access login and new-order alerts.
+5. **Existing Supabase data** — any listings or orders that must be
+   carried over, or start fresh?
