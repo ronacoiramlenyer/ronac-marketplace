@@ -8,6 +8,17 @@ This proposal revises the workflow already in the repo. It keeps what works
 and fills the gaps that matter when the product is a frozen, perishable,
 made-in-batches item like longganisa.
 
+### Decisions from the owner
+
+| Topic | Decision |
+|-------|----------|
+| Variants | **One posting per variant** (e.g. "Garlic Longganisa · 500 g" is its own listing). No variant picker. |
+| Service area | **La Salle Green Hills, Neovista Homes, Tierra Nova Royale** — pickup and delivery within these areas only. |
+| Next-day cut-off | **6:00 PM.** Orders placed after 6 PM are scheduled for the day after tomorrow at the earliest. |
+| Unpaid orders | **Unpaid orders don't go through.** An order only exists once payment proof is attached; there is no "reserve now, pay later". |
+| New-order alerts | Any channel — **email via the existing Resend setup** is proposed (already wired, free tier). |
+| Minimum order / delivery fee | *Still open* — see §7. |
+
 ---
 
 ## 1. What the repo does today
@@ -22,7 +33,7 @@ Gaps for longganisa specifically:
 
 | # | Gap | Where | Why it matters |
 |---|-----|-------|----------------|
-| 1 | No variants (flavor, pack size) | `listings` has one price per row | Longganisa is sold as *Hamonado / Garlic / Spicy*, in *250 g / 500 g / 1 kg* or *12 pcs* packs. Today each combo would need its own listing. |
+| 1 | ~~No variants~~ | — | Resolved by decision: one posting per variant, so the current one-price-per-listing model is fine. |
 | 2 | No stock count | `listings.status` is only available/pending/sold; the cart stepper has no cap | Batches are finite. Buyers can order 20 packs when 8 exist. |
 | 3 | No pickup/delivery details | `orders` has only name + contact | Frozen goods need a delivery area, address, and a time slot so they don't thaw waiting. |
 | 4 | No order reference for the buyer | Confirmation page shows nothing to quote | Buyer can't follow up ("Hi, re: order RNC-0142…"). |
@@ -39,34 +50,45 @@ Gaps for longganisa specifically:
 ## 2. Proposed buyer workflow
 
 ```
-1. Browse      Catalog shows each longganisa product once, with variant picker
-               (flavor + pack size), price per variant, and "X packs left".
-2. Add to cart Qty stepper capped at stock left. Cart line shows variant.
+1. Browse      Catalog shows each posting (one per variant) with price and
+               "X packs left". Sold-out postings show "Sold out".
+2. Add to cart Qty stepper capped at packs left.
 3. Fulfillment Choose PICKUP or DELIVERY.
-                 • Pickup: pick a date + time slot from the seller's open slots.
-                 • Delivery: barangay/city (must be in service area), address,
-                   landmark, date + slot. Delivery fee added by zone.
-               Minimum order (e.g. ₱500) enforced for delivery.
+                 • Area (required, dropdown): La Salle Green Hills /
+                   Neovista Homes / Tierra Nova Royale. Nothing else is
+                   accepted.
+                 • Delivery: street/house no. + landmark.
+                 • Date: earliest is tomorrow if before 6:00 PM, otherwise
+                   the day after. Time slot from the seller's open slots.
+               Minimum order / delivery fee applied if set (§7).
 4. Details     Name, mobile number (09xx format validated), optional
-               Messenger/FB name, notes ("pakihiwalay ang spicy").
+               Messenger/FB name, notes ("gate code", "leave with guard").
 5. Review      Server re-prices the cart and returns the official total
                (items + delivery fee). Buyer sees exactly what to pay.
+               Nothing is saved yet.
 6. Pay         GCash or BPI QR + account details, amount shown large with
                a copy button. Reminder: "Pay the exact amount."
 7. Proof       Upload screenshot (required) + GCash/BPI reference no.
-               (required, 13 digits for GCash). Submit.
-8. Confirmed   Shows order number (RNC-0142), summary, slot, and a
+               (required). The Submit button stays disabled until both are
+               present — this is the only way an order gets created.
+8. Confirmed   Shows order number (RNC-0142), summary, area, date/slot, and a
                tracking link /order/<id>?t=<token>. "Save this link."
 9. Track       Buyer opens the link anytime to see the current status.
 ```
 
-### Stock reservation rule
+### "Unpaid orders don't go through"
 
-- On submit, the ordered quantity is **reserved** (subtracted from
-  "packs left").
-- If the seller rejects the payment, or the order is cancelled, the
-  quantity is **released** back.
-- Optional: unverified orders older than 24 h auto-expire and release stock.
+- There is **no order record and no stock hold** until the buyer submits
+  with a proof screenshot and reference number. Leaving the page at the
+  QR step leaves nothing behind — so no expiry job is needed.
+- On submit, the server re-checks stock and price, then creates the order
+  and subtracts the packs in one step.
+- Edge case: if the last packs sold out while the buyer was paying, the
+  submit is refused with "Sorry, only N left" and the buyer can reduce the
+  quantity (seller refunds the difference) or message the seller for a
+  refund. The seller sees these as **refund needed** — see §3.
+- If the seller **rejects** a proof (wrong amount, not received), the order
+  is marked rejected and the packs go back to stock.
 
 ---
 
@@ -95,60 +117,68 @@ Seller actions on the Orders page:
 
 Plus:
 
-- **Daily prep view**: tomorrow's paid orders grouped by slot, with a total
-  pack count per variant ("Garlic 500 g × 14, Hamonado 1 kg × 6") so the
-  seller knows how much to thaw-out/pack.
-- **New-order alert**: email (existing Resend setup) or Messenger/SMS when
-  an order is submitted.
-- **Stock edit**: set packs left per variant when a new batch is made.
+- **Refund needed**: a buyer who paid but couldn't submit (stock ran out
+  mid-checkout) can message the seller with their ref no.; the seller
+  refunds manually. Rejected orders with a real payment also get a
+  "Refunded" checkbox so nothing is forgotten.
+- **Daily prep view**: after the 6:00 PM cut-off, tomorrow's paid orders
+  grouped by area and slot, with a total pack count per posting ("Garlic
+  500 g × 14, Hamonado 1 kg × 6") so the seller knows what to pack and the
+  delivery route (LSGH → Neovista → Tierra Nova Royale).
+- **New-order alert**: email to the seller through the existing Resend
+  setup when an order is submitted, with order no., total, area and a link
+  to the Orders page. SMS/Messenger can be added later.
+- **Stock edit**: set packs left on each posting when a new batch is made.
 
 ---
 
 ## 4. Data model changes (Supabase)
 
 ```sql
--- products: one row per longganisa product (replaces per-combo listings)
-listings            -- keep table, add:
-  category text default 'longganisa'
-
--- variants: flavor/size combos with their own price + stock
-listing_variants
-  id uuid pk, listing_id uuid fk → listings,
-  label text,            -- "Garlic · 500 g"
-  price numeric(10,2),
-  stock int check (stock >= 0),
-  is_active bool default true
+-- listings: one row per variant (as today), add:
+  stock int not null default 0 check (stock >= 0)
+  -- status 'sold' is set automatically when stock hits 0
 
 -- orders: add
   order_no      text unique   -- "RNC-0142", from a sequence
   access_token  text          -- for the buyer's tracking link
   fulfillment   text check (fulfillment in ('pickup','delivery'))
+  area_id       fk → service_areas
+  address       text, landmark text      -- delivery only
   slot_date     date, slot_time text
-  address       text, barangay text, landmark text
   delivery_fee  numeric(10,2) default 0
-  payment_ref   text          -- GCash/BPI reference number
+  payment_ref   text not null  -- GCash/BPI reference number
+  proof_path    text not null  -- unpaid orders can't exist
   reject_reason text
   status        -- new set: submitted, paid, rejected, preparing,
                 --          ready_for_pickup, out_for_delivery,
                 --          completed, cancelled
   status_updated_at timestamptz
 
--- delivery zones + slots (simple config tables, seller-editable)
-delivery_zones (name text, fee numeric, min_order numeric)
-pickup_slots   (weekday int, time_label text, capacity int)
+-- service areas + slots (small config tables, seller-editable)
+service_areas (name text, delivery_fee numeric, min_order numeric,
+               allows_pickup bool, allows_delivery bool, is_active bool)
+  -- seeded: La Salle Green Hills, Neovista Homes, Tierra Nova Royale
+time_slots    (time_label text, capacity int, is_active bool)
 ```
 
 ### Server-side order creation (fixes gaps 2, 7)
 
-Replace the direct `insert into orders` from the browser with a Postgres
-function the buyer calls via `supabase.rpc('place_order', {...})`:
+Two Postgres functions replace the direct `insert into orders` from the
+browser:
 
-1. Receives only `variant_id` + `quantity` per line, plus buyer/fulfillment
-   fields — **never prices or totals**.
-2. Locks the variant rows, checks `stock >= quantity`, decrements stock.
-3. Looks up prices + zone fee, computes the total itself.
-4. Inserts the order with a generated `order_no` and `access_token`.
-5. Returns `{ order_no, id, access_token, total }`.
+- `quote_order(lines, area_id, fulfillment)` — read-only. Returns the
+  official total for the Review/Pay step. Saves nothing.
+- `place_order({...})` — called on Submit, **after** the proof is uploaded:
+  1. Receives only `listing_id` + `quantity` per line, buyer and
+     fulfillment fields, `payment_ref`, `proof_path` — **never prices or
+     totals**. Rejects the call if proof or ref no. is missing.
+  2. Checks the area is an active service area and the slot date respects
+     the 6:00 PM (Asia/Manila) cut-off.
+  3. Locks the listing rows, checks `stock >= quantity`, decrements stock.
+  4. Looks up prices + area fee, computes the total itself.
+  5. Inserts the order with a generated `order_no` and `access_token`.
+  6. Returns `{ order_no, id, access_token, total }`.
 
 The anonymous `insert` policy on `orders` is then removed; the function runs
 as `security definer`. A matching `release_order_stock(order_id)` is called
@@ -173,13 +203,13 @@ slot — only when the token matches. No buyer login required.
 
 | File | Change |
 |------|--------|
-| `src/components/ProductCard.jsx` | Variant chips (flavor / size), price updates per variant, "X left", disable when 0. |
-| `src/context/CartContext.jsx` | Key cart lines by `variant_id`; cap qty at stock; bump storage key to `ronac_cart_v2`. |
-| `src/pages/Cart.jsx` | Split into steps: Cart → Fulfillment → Details → Pay & Proof. Call `place_order` RPC *before* showing the QR so the amount shown is the server total; then upload proof + ref no. to that order. |
+| `src/components/ProductCard.jsx` | Show "X left"; "Sold out" when stock is 0. |
+| `src/context/CartContext.jsx` | Store stock with each line; cap qty at stock. |
+| `src/pages/Cart.jsx` | Split into steps: Cart → Fulfillment (area dropdown, date honoring 6 PM cut-off, slot) → Details → Pay & Proof. Call `quote_order` to show the server total on the QR step; upload proof, then call `place_order` on Submit. |
 | `src/pages/OrderConfirmed.jsx` | Show order no., summary, slot, tracking link with copy button. |
 | `src/pages/TrackOrder.jsx` (new) | `/order/:id?t=token` status timeline. |
 | `src/pages/Orders.jsx` | New status tabs; inline proof (signed URL); Verify / Reject buttons instead of a raw dropdown; reject reason; daily prep view. |
-| `src/pages/Listings.jsx` | Manage variants + stock per product. |
+| `src/pages/Listings.jsx` | Add a "packs left" field to each posting. |
 | `supabase/functions/notify-seller` | Also fire on `orders` INSERT (new order) — optional: notify buyer by SMS on status change. |
 | `README.md` | Replace Stripe section with the GCash/BPI flow. |
 
@@ -194,24 +224,22 @@ can be removed, or kept for a later card-payment option.
    proofs bucket, tighter `orders` RLS, order number on confirmation. *(No
    visible UX change beyond the order number; closes the price-tampering
    and privacy holes.)*
-2. **Stock + variants** — `listing_variants`, stock caps, reservation /
-   release.
-3. **Fulfillment** — pickup/delivery, zones, slots, min order, fee.
+2. **Stock** — `stock` on listings, caps in the cart, decrement on submit,
+   release on reject/cancel, auto "Sold out".
+3. **Fulfillment** — pickup/delivery, the three service areas, 6 PM
+   cut-off, time slots, min order / fee once decided.
 4. **Seller ops** — new statuses, Verify/Reject, prep view, new-order email.
 5. **Buyer tracking** — tracking link + status page.
 6. **Cleanup** — README, remove Stripe stub.
 
 ---
 
-## 7. Open questions for the owner
+## 7. Still open
 
-1. Pack sizes and flavors to launch with? (e.g. Hamonado, Garlic, Spicy ×
-   250 g / 500 g / 1 kg)
-2. Pickup, delivery, or both? Where is pickup, and which areas get
-   delivery?
-3. Who delivers — own rider, Lalamove/Grab booked by seller, or buyer books
-   their own?
-4. Minimum order and delivery fees per area?
-5. Cut-off for next-day orders (e.g. order by 6 PM for tomorrow)?
-6. Should unverified orders auto-expire, and after how long?
-7. Preferred new-order alert: email, SMS, or Messenger?
+1. **Minimum order and delivery fee.** Not decided yet. The proposal
+   supports a fee and minimum per area; until set, both default to ₱0
+   (free delivery, no minimum) so this doesn't block the build.
+2. **Pickup point(s).** Is pickup at one fixed spot, or a meet-up inside
+   each of the three areas?
+3. **Who delivers** within the areas — the seller, or a rider?
+4. **Delivery days and time slots** (e.g. daily, 9–12 / 2–5)?
