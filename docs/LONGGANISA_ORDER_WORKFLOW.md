@@ -13,7 +13,8 @@ made-in-batches item like longganisa.
 | Topic | Decision |
 |-------|----------|
 | Variants | **One posting per variant** (e.g. "Garlic Longganisa · 500 g" is its own listing). No variant picker. |
-| Service area | **La Salle Green Hills, Neovista Homes, Tierra Nova Royale** — pickup and delivery within these areas only. |
+| Pickup | **La Salle Green Hills (LSGH)** — the seller's workplace. |
+| Delivery | **Neovista Homes and Tierra Nova Royale** only — near the seller's home. |
 | Next-day cut-off | **6:00 PM.** Orders placed after 6 PM are scheduled for the day after tomorrow at the earliest. |
 | Unpaid orders | **Unpaid orders don't go through.** An order only exists once payment proof is attached; there is no "reserve now, pay later". |
 | New-order alerts | Any channel — **email via the existing Resend setup** is proposed (already wired, free tier). |
@@ -54,10 +55,10 @@ Gaps for longganisa specifically:
                "X packs left". Sold-out postings show "Sold out".
 2. Add to cart Qty stepper capped at packs left.
 3. Fulfillment Choose PICKUP or DELIVERY.
-                 • Area (required, dropdown): La Salle Green Hills /
-                   Neovista Homes / Tierra Nova Royale. Nothing else is
-                   accepted.
-                 • Delivery: street/house no. + landmark.
+                 • Pickup: at LSGH. No address needed.
+                 • Delivery: subdivision (required, dropdown): Neovista
+                   Homes / Tierra Nova Royale — nothing else is accepted.
+                   Then street/house no. + landmark.
                  • Date: earliest is tomorrow if before 6:00 PM, otherwise
                    the day after. Time slot from the seller's open slots.
                Minimum order / delivery fee applied if set (§7).
@@ -122,9 +123,10 @@ Plus:
   refunds manually. Rejected orders with a real payment also get a
   "Refunded" checkbox so nothing is forgotten.
 - **Daily prep view**: after the 6:00 PM cut-off, tomorrow's paid orders
-  grouped by area and slot, with a total pack count per posting ("Garlic
-  500 g × 14, Hamonado 1 kg × 6") so the seller knows what to pack and the
-  delivery route (LSGH → Neovista → Tierra Nova Royale).
+  split into **LSGH pickups** (bring to work) and **home deliveries**
+  (Neovista Homes, Tierra Nova Royale), each with a total pack count per
+  posting ("Garlic 500 g × 14, Hamonado 1 kg × 6") so the seller knows what
+  to pack for each.
 - **New-order alert**: email to the seller through the existing Resend
   setup when an order is submitted, with order no., total, area and a link
   to the Orders page. SMS/Messenger can be added later.
@@ -158,7 +160,8 @@ Plus:
 -- service areas + slots (small config tables, seller-editable)
 service_areas (name text, delivery_fee numeric, min_order numeric,
                allows_pickup bool, allows_delivery bool, is_active bool)
-  -- seeded: La Salle Green Hills, Neovista Homes, Tierra Nova Royale
+  -- seeded: La Salle Green Hills (pickup only),
+  --         Neovista Homes, Tierra Nova Royale (delivery only)
 time_slots    (time_label text, capacity int, is_active bool)
 ```
 
@@ -239,7 +242,6 @@ can be removed, or kept for a later card-payment option.
 1. **Minimum order and delivery fee.** Not decided yet. The proposal
    supports a fee and minimum per area; until set, both default to ₱0
    (free delivery, no minimum) so this doesn't block the build.
-2. **Pickup point(s).** Is pickup at one fixed spot, or a meet-up inside
-   each of the three areas?
-3. **Who delivers** within the areas — the seller, or a rider?
-4. **Delivery days and time slots** (e.g. daily, 9–12 / 2–5)?
+2. **Pickup and delivery times.** Assumed: LSGH pickup during work hours,
+   home delivery after work. Exact slots and days still to be set; they
+   are seller-editable, so this doesn't block the build.
