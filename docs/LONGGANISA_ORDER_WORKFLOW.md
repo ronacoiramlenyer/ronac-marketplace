@@ -361,10 +361,12 @@ API *is* the safety fix, so there's no point building it on Supabase first.
    6 PM cut-off, slots, fees and minimum once decided.
 5. **Buyer tracking + prep view.**
 6. **Data move + cutover**
-   - Export `listings` (and any `orders` worth keeping) from Supabase as
-     CSV → convert to SQL inserts → `wrangler d1 execute --remote`.
-   - Copy product photos from Supabase Storage to R2 (small script, or
-     `rclone` — both speak S3) and rewrite `image_url` → `image_key`.
+   - **Listings: copy over** (owner decision; orders start fresh).
+     `scripts/export-supabase-listings.mjs` reads all listings + photos
+     with the public anon key and writes `seed_listings.sql` (D1) and
+     `upload-images.sh` (R2). Supabase listings have no stock count, so
+     available ones get `--default-stock N` and sold/pending get 0 — set
+     real counts on the Listings page after.
    - Buy the domain on Cloudflare Registrar, attach it to the Worker,
      move the Access app to the custom domain.
    - Smoke test a real ₱1 GCash order end to end.
@@ -383,5 +385,3 @@ API *is* the safety fix, so there's no point building it on Supabase first.
    this doesn't block the build.
 3. **Domain name** — which name to buy (and `.com` vs `.ph`; see §4).
 4. **Seller email** for the Access login and new-order alerts.
-5. **Existing Supabase data** — any listings or orders that must be
-   carried over, or start fresh?
